@@ -14,7 +14,7 @@ intents.guilds = True
 intents.members = True
 client = nextcord.Client(intents=intents)
 
-tracks = [f"track_{i}" for i in range(1,26)]
+tracks = [f"track_{i}" for i in range(1,3)]
 data = pd.DataFrame({
     'user_id': [12345, 67890, 54321],
     'track_1': [120.5, 115.8, 122.4],
@@ -31,24 +31,11 @@ async def on_ready():
     scheduler.add_job(update_times, 'interval', hours=1)
     scheduler.start() 
 
-#when a new PB is detected, update the CSV
-def update_times():
-    for user_id in data.index:
-        if user_id not in data.index:
-            data.loc[user_id] = {track: new_time}
-        for track in tracks:
-            new_time = fetch_times
-            update_pb(user_id, track, new_time)
-    data.to_csv("personal_bests.csv")
-
 #grab the data from the CSV
 def load_data():
     global data
     if os.path.exists("personal_bests.csv"):
-        data = pd.read_csv("personal_bests.csv", index_col="user_id")
-
-        #strip leading/trailing whitespace
-        data.columns = data.columns.str.strip()
+        data = pd.read_csv("personal_bests.csv")
 
         #print column names to inspect
         print("Columns in CSV:", data.columns)
@@ -75,7 +62,18 @@ def load_data():
 
 #API call code goes here - for now, just generating random data for testing
 def fetch_times(track):
-    return round(random.uniform(60.0, 120.0), 2)
+    new_time = round(random.uniform(60.0, 120.0), 2)
+    return new_time
+    
+#logic to detect new PB
+def update_times():
+    for user_id in data.index:
+        if user_id not in data.index:
+            data.loc[user_id] = {track: new_time}
+        for track in tracks:
+            new_time = fetch_times(track)
+            update_pb(user_id, track, new_time)
+            data.to_csv("personal_bests.csv", index=True)
 
 #logic for checking if the data pulled from the API call is new, to update the CSV
 def update_pb(user_id, track, new_time):
@@ -94,8 +92,8 @@ def update_pb(user_id, track, new_time):
         data.at[user_id, track] = new_time
 
 #custom discord slash command for manually updating data
-@client.slash_command(name='Update', description='Update campaign times manually')
-async def Update(ctx, track: str):
+@client.slash_command(name='update', description='Update campaign times manually')
+async def update(ctx, track: str):
     user_id = ctx.author.id
     new_time = fetch_times(track)
     update_pb(user_id, track, new_time)
@@ -104,6 +102,7 @@ async def Update(ctx, track: str):
 #incase of bot closing, save the data
 @client.event
 async def on_close():
+    data.reset_index(inplace=True)
     data.to_csv("Personal_bests.csv", index=False)
 
 client.run(os.getenv('BOT_TOKEN'))
